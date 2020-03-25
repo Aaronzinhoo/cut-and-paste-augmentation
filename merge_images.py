@@ -134,7 +134,7 @@ def clean_edges_of_object(image, thickness=5):
 	
 
 # testing, first argument is a directory containing foreground, 'objects', and the second argument is the background object. 
-# adjust however you need 
+# adjust however you need ok!
 if __name__ == '__main__':
 	if len(sys.argv) != 3:
 		sys.exit(1)
