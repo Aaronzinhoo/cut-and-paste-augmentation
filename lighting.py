@@ -96,7 +96,11 @@ def add_parallel_light(frame, light_position=None, direction=None, max_brightnes
     if transparency is None:
         transparency = random.uniform(0.5, 0.85)
     height, width, _ = frame.shape
-    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+    try:
+        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+    except Exception:
+        hsv = cv2.cvtColor(frame.astype('uint8'),cv2.COLOR_BGR2HSV)
+
     mask = _generate_parallel_light_mask(mask_size=(width, height),
                                         position=light_position,
                                         direction=direction,
@@ -191,7 +195,10 @@ def add_spot_light(frame, light_position=None, max_brightness=255, min_brightnes
     if transparency is None:
         transparency = random.uniform(0.5, 0.85)
     height, width, _ = frame.shape
-    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+    try:
+        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+    except Exception:
+        hsv = cv2.cvtColor(frame.astype('uint8'),cv2.COLOR_BGR2HSV)
     mask = _generate_spot_light_mask(mask_size=(width, height),
                                     position=light_position,
                                     max_brightness=max_brightness,

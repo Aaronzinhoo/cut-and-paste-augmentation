@@ -5,13 +5,14 @@ import random
 from pathlib import Path
 import imgaug as ia
 import imgaug.augmenters as iaa
+from image_augmentation import augment_lighting
 
 OBJECT_IMAGE_SIZE_PERCENT = 0.25
 TRAINING_IMAGE_SIZE = 512
 
 # note this algorithn assumes the object is a clean segmented object
 
-def merge_object_container(obj, container, aug_object=0, aug_container=0, clean_object_edges=True):
+def merge_object_container(obj, container, aug_object=0, aug_container=0, add_lighting=0, clean_object_edges=True):
 	"""
 	Merge foreground image 'object', with its background image 'container'
 	Args:
@@ -25,7 +26,7 @@ def merge_object_container(obj, container, aug_object=0, aug_container=0, clean_
 	"""
 	merged = []
 
-	if apply_blur_to_object:
+	if clean_object_edges:
 		obj = clean_edges_of_object(obj)
 	
 	# augmentation if you need change these lines to what match you needs
@@ -46,7 +47,10 @@ def merge_object_container(obj, container, aug_object=0, aug_container=0, clean_
 			# this line is not as necessary with the clean edges function but still helps a little
 			mask = np.all(resized_object > 2, axis=2).reshape(TRAINING_IMAGE_SIZE, TRAINING_IMAGE_SIZE, 1)* [1,1,1]
 			merged_image = np.where(mask, resized_object, resized_container)
-			merged.append(merged_image)
+			if add_lighting:
+				merged.extend(augment_image_lighting(merged_image, add_lighting))
+			else:
+				merged.append(merged_image)
 	return merged
 
 def apply_transformations(image, N=10):
@@ -72,7 +76,7 @@ def apply_transformations(image, N=10):
 	return images_aug
 
 
-def resize_object(obj, container_shape, object_size_scale=0.5, keep_aspect_ratio=1):
+def resize_object(obj, container_shape, object_size_scale=0.25, keep_aspect_ratio=1):
 	"""
 	Resize object image to be object_size_scale percent of the container size. Aspect ratio can be preserved if needed
 	Args:
@@ -124,7 +128,7 @@ def clean_edges_of_object(image, thickness=5):
 	#blurred_image = cv2.GaussianBlur(image, (15, 15), 0)
   
 	# Finding Contours 
-	contours, hierarchy = cv2.findContours(gray, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)   
+	_ , contours, hierarchy = cv2.findContours(gray, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)   
 
 	# Draw all contours 
 	# -1 signifies drawing all contours 
@@ -132,6 +136,28 @@ def clean_edges_of_object(image, thickness=5):
 	mask = np.all(mask == 255, axis=2).reshape(image.shape[0], image.shape[1], 1)* [1,1,1]
 	return np.where(mask, [0,0,0], image)
 	
+def crop_and_resize_image(image, size, min_crop=0.25, prob=0.5):
+	cropped_image = image.copy()
+	if np.random.binomial(1,prob):
+		h,w = image.shape[:2]
+		
+		crop_width = np.random.randint(int(w*min_crop), w)
+		crop_height = np.random.randint(int(h*min_crop), h)
+		
+		max_x = image.shape[1] - crop_width
+		max_y = image.shape[0] - crop_height
+
+		x = np.random.randint(0, max_x)
+		y = np.random.randint(0, max_y)
+
+		cropped_image = image[y: y + crop_height, x: x + crop_width]
+	return cv2.resize(cropped_image,size)
+
+def augment_image_lighting(image, N=3):
+    light_images = []
+    light_images.extend(augment_lighting(image, N))
+    return light_images
+
 
 # testing, first argument is a directory containing foreground, 'objects', and the second argument is the background object. 
 # adjust however you need ok!
@@ -139,9 +165,9 @@ if __name__ == '__main__':
 	if len(sys.argv) != 3:
 		sys.exit(1)
 	
-	#reshape the container
+	# random crop container and reshape if necessary
 	container = cv2.imread(sys.argv[2])
-	resized_container = cv2.resize(container, (TRAINING_IMAGE_SIZE,TRAINING_IMAGE_SIZE))
+	resized_container = crop_and_resize_image(container, (TRAINING_IMAGE_SIZE,TRAINING_IMAGE_SIZE))
 
 	#reshape object and merge with container
 	for image in Path(sys.argv[1]).iterdir():
