@@ -1,8 +1,10 @@
+import numpy as np
 import cv2
 import enum
 import random
 import argparse
 from pathlib import Path
+from tqdm import tqdm
 
 from merge_images import crop_and_resize_image
 from merge_images import resize_object
@@ -15,18 +17,18 @@ def get_args():
 	arg_parser.add_argument('--root_merged_dir','-m', help='path for merged images to be stored')
 	arg_parser.add_argument('--root_dataset_dir','-d', help='path for merged images to be stored')
 	arg_parser.add_argument('--merged_image_size', '-t', nargs=2, type=int, default=[512, 512] ,help='size of merged images')
-	arg_parser.add_argument('--split_dataset',action='store_true',help='split the dataset into training and test sets')
 	arg_parser.add_argument('--train_val_test_split', nargs=2, type=float, default=[0.5, 0.25],
 							help='splits for test val and train datasets')
 	arg_parser.add_argument('--object_size_scale' , type=float, default=0.25, 
 							help='size of background to scale object size to')
 	arg_parser.add_argument('--keep_object_aspect_ratio', type=float, default=1, 
 							help='proportion of times to keep objects aspect ratio the same after resizing')
-	arg_parser.add_argument('--aug_container', type=int, default=2, help="number of augmented copies of container")
-	arg_parser.add_argument('--aug_object', type=int, default=2, help="number of augmented copies of object")
-	arg_parser.add_argument('--aug_light', type=int, default=2, help='number of light augmentations on merged images')
-	arg_parser.add_argument('--crop_container_prob', default=0.5, type=float, help='prob that container is randomly cropped')
-	arg_parser.add_argument('--container_min_crop_proportion', default=0.25, type=float, help='minimum percent of container sides that are cropped')
+	arg_parser.add_argument('--num_containers_per_object', type=int, default=5, help="number of containers to combine with each object")
+	arg_parser.add_argument('--aug_container', type=int, default=1, help="number of augmented copies of container")
+	arg_parser.add_argument('--aug_object', type=int, default=1, help="number of augmented copies of object")
+	arg_parser.add_argument('--aug_light', type=int, default=1, help='number of light augmentations on merged images')
+	arg_parser.add_argument('--crop_container_prob', default=0.75, type=float, help='prob that container is randomly cropped')
+	arg_parser.add_argument('--container_min_crop_proportion', default=0.1, type=float, help='minimum percent of container sides that are cropped')
 	arg_parser.add_argument('--seed', default=42, type=int, help='seed for splitting dataset')
 	return arg_parser.parse_args()
 
@@ -39,15 +41,19 @@ class RecycleClasses(enum.Enum):
 
 def merge_class_container_images(object_dir, container_dir,
 								 merged_dir, merged_image_size, 
-								 object_size_scale, keep_object_aspect_ratio, aug_container, aug_object,
+								 object_size_scale, keep_object_aspect_ratio, num_containers_per_object,
+								 aug_container, aug_object,
 								 aug_light, crop_container_prob, container_min_crop_proportion):
 	training_images = []
 	count = 0
-	for container_path in container_dir:
-		#reshape object and merge with container
-		for object_path in Path(object_dir).iterdir():
+	for object_path in tqdm(Path(object_dir).iterdir()):
+		containers_to_merge = np.random.choice(container_dir, num_containers_per_object)
+		for container_path in containers_to_merge:
 			container_image = cv2.imread(str(container_path))
 			object_image = cv2.imread(str(object_path))
+			if container_image is None or object_image is None:
+				print('Skipping broken image')
+				continue
 			
 			# resize objects and containers
 			resized_container_image = crop_and_resize_image(container_image, tuple(merged_image_size))
@@ -73,9 +79,9 @@ def write_label_file(images, label_file):
 def split_data(classes, root_dataset_dir, splits, shuffle=True):
     """
     Make a dataset that can be loaded into dataloader (FOR TRAINING PURPOSES):
-        We use a validation and train label to file to feed to the data loader(pytorch) 
+        We use a validation and train label to file to feed to the data loader(pytorch)
         while splitting the images into train and val sets (assuming)
-    
+
     ****name are irrelevant so long as it follows this structure****
     structure of dir:
         root->
@@ -108,7 +114,7 @@ def split_data(classes, root_dataset_dir, splits, shuffle=True):
         training_cutoff = int(class_data[0]* splits[0])
         validation_cutoff = int(class_data[0]*splits[1])+training_cutoff
         print("TRAINING IMAGES: {} For Label {}".format(training_cutoff,class_name))
-        
+
         dataset["train"].extend([(image_path,i) for image_path in class_data[1][:training_cutoff]])
         dataset["val"].extend([(image_path,i) for image_path in class_data[1][training_cutoff:validation_cutoff]])
         dataset["test"].extend([(image_path,i) for image_path in class_data[1][validation_cutoff:]])
@@ -125,20 +131,21 @@ def split_data(classes, root_dataset_dir, splits, shuffle=True):
     write_label_file(dataset["test"] ,test_dir / 'test_labels.csv')
 
 
-def main(root_object_dir, container_dir, split_dataset, seed, 
+def main(root_object_dir, container_dir, seed,
 		 root_dataset_dir, root_merged_dir, train_val_test_split,**kwargs):
 	random.seed(seed)
+	np.random.seed(seed)
 	merged_dir = None
 	containers = list(Path(container_dir).iterdir())
 	dataset = {}
-	for object_dir in Path(root_object_dir).iterdir():
+	for object_dir in tqdm(Path(root_object_dir).iterdir()):
 		class_name = object_dir.name
+		print('=' * 20, class_name, '=' * 20)
 		merged_dir = Path(root_merged_dir) / class_name
 		merged_dir.mkdir(parents=True, exist_ok=True)
 		class_images = merge_class_container_images(object_dir=object_dir, container_dir=containers, merged_dir=merged_dir,**kwargs)
 		dataset[class_name] = [len(class_images), class_images]
-	if split_dataset: 
-		split_data(dataset, root_dataset_dir, train_val_test_split)
+	split_data(dataset, root_dataset_dir, train_val_test_split)
 
 if __name__ == '__main__':
 	args = get_args()
