@@ -94,10 +94,21 @@ def resize_object(obj, container_shape, object_size_scale=0.25, keep_aspect_rati
 	if np.random.binomial(1,keep_aspect_ratio):
 		h,w = obj.shape[:2]
 		aspect_ratio = w/h
-		area = w*h
-		new_h = np.sqrt(new_object_area/aspect_ratio)
+		new_h = int(round(np.sqrt(new_object_area/aspect_ratio)))
 		new_w = int(round(new_h * aspect_ratio))
-		new_h = int(round(new_h))
+
+		# if either of the sides are longer than the container size 
+		# resize the longer side to be smaller than container
+		if new_h > container_shape[0]:
+			pixels_over_boundary = new_h - container_shape[0]
+			# remove the excess pixels over the boudary and give 10% padding also
+			new_h -= int(round(pixels_over_boundary + container_shape[0]*.10))
+			new_w = int(round(new_h*aspect_ratio))
+		if new_w > container_shape[1]:
+			pixels_over_boundary = new_w - container_shape[1]
+			new_w -= int(round(pixels_over_boundary + container_shape[1]*.10))
+			new_h = int(round(new_w*(1/aspect_ratio)))
+
 		resized_object = cv2.resize(obj, (new_w, new_h))
 
 	# square resize
@@ -105,14 +116,15 @@ def resize_object(obj, container_shape, object_size_scale=0.25, keep_aspect_rati
 		new_h = new_object_area // 2
 		new_w = new_h
 		resized_object = cv2.resize(obj, (new_w, new_h))
-
+	
 	result = np.zeros((container_shape[0], container_shape[1],3), dtype=np.uint8)
 	# compute center offset
-	center_offset_h = (container_shape[0] - new_h) // 2
-	center_offset_w = (container_shape[1] - new_w) // 2
+	center_offset_h = max(0, container_shape[0] - new_h) // 2
+	center_offset_w = max(0, container_shape[1] - new_w) // 2
 	# copy img image into center of result image
 	result[center_offset_h:center_offset_h+new_h, center_offset_w:center_offset_w+new_w] = resized_object
 	return result
+
 
 def clean_edges_of_object(image, thickness=5):
 	"""
@@ -135,6 +147,7 @@ def clean_edges_of_object(image, thickness=5):
 	cv2.drawContours(mask, contours, -1, (255, 255, 255), thickness)
 	mask = np.all(mask == 255, axis=2).reshape(image.shape[0], image.shape[1], 1)* [1,1,1]
 	return np.where(mask, [0,0,0], image)
+
 	
 def crop_and_resize_image(image, size, min_crop=0.25, prob=0.5):
 	cropped_image = image.copy()
@@ -152,6 +165,7 @@ def crop_and_resize_image(image, size, min_crop=0.25, prob=0.5):
 
 		cropped_image = image[y: y + crop_height, x: x + crop_width]
 	return cv2.resize(cropped_image,size)
+
 
 def augment_image_lighting(image, N=3):
     light_images = []
