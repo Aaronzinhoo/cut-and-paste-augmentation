@@ -74,7 +74,13 @@ def write_label_file(images, label_file):
     # copy the images from the labeled folder to the training and validation folders
     with open(label_file,'w+') as f:
         for image_path,label in images:
-            f.write(image_path +','+str(label)+'\n')
+        	path = Path(image_path)
+        	
+        	class_name = path.parent.stem
+        	image_name = path.stem
+
+        	image_path = str(Path(class_name) / image_name)
+        	f.write(image_path +','+str(label)+'\n')
 
 def split_data(classes, root_dataset_dir, splits, shuffle=True):
     """
