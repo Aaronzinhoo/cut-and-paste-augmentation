@@ -6,13 +6,14 @@ from pathlib import Path
 import imgaug as ia
 import imgaug.augmenters as iaa
 from image_augmentation import augment_lighting
+from image_augmentation import augment_image
 
 OBJECT_IMAGE_SIZE_PERCENT = 0.25
 TRAINING_IMAGE_SIZE = 512
 
 # note this algorithn assumes the object is a clean segmented object
 
-def merge_object_container(obj, container, aug_object=0, aug_container=0, add_lighting=0, clean_object_edges=True):
+def merge_object_container(obj, container, aug_object=0, aug_container=0, aug_merged=0, add_lighting=0, clean_object_edges=True):
 	"""
 	Merge foreground image 'object', with its background image 'container'
 	Args:
@@ -25,17 +26,25 @@ def merge_object_container(obj, container, aug_object=0, aug_container=0, add_li
 		list of merged object and container images
 	"""
 	merged = []
+	augmentations = []
+	
+	if aug_merged and add_lighting:
+		augmentations = [(add_lighting, augment_lighting), (aug_merged, augment_image)]
+	elif add_lighting:
+		augmentations = [(add_lighting, augment_lighting)]
+	elif aug_merged:
+		augmentations = [(aug_merged, augment_image)]
 
 	if clean_object_edges:
 		obj = clean_edges_of_object(obj)
 	
 	# augmentation if you need change these lines to what match you needs
-
 	# you may not want to add transformations to backgrounds but this may be used with hands.
 	if aug_container:
 		containers = apply_transformations(container, aug_container)
 	else:
 		containers = [container]
+	# augment object
 	if aug_object:
 		objects = apply_transformations(obj, aug_object)
 	else:
@@ -47,8 +56,12 @@ def merge_object_container(obj, container, aug_object=0, aug_container=0, add_li
 			# this line is not as necessary with the clean edges function but still helps a little
 			mask = np.all(resized_object > 2, axis=2).reshape(TRAINING_IMAGE_SIZE, TRAINING_IMAGE_SIZE, 1)* [1,1,1]
 			merged_image = np.where(mask, resized_object, resized_container)
-			if add_lighting:
-				merged.extend(augment_image_lighting(merged_image, add_lighting))
+			if len(augmentations) > 1:
+				random.shuffle(augmentations)
+				for num_augs, aug_func in augmentations:
+					merged.extend(aug_func(merged_image, num_augs))
+			elif len(augmentations) == 1:
+				merged.extend(augmentations[1](merged_image, augmentations[0]))
 			else:
 				merged.append(merged_image)
 	return merged

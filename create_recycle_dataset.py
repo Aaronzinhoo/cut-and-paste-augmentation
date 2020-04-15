@@ -26,7 +26,8 @@ def get_args():
 	arg_parser.add_argument('--num_containers_per_object', type=int, default=5, help="number of containers to combine with each object")
 	arg_parser.add_argument('--aug_container', type=int, default=1, help="number of augmented copies of container")
 	arg_parser.add_argument('--aug_object', type=int, default=1, help="number of augmented copies of object")
-	arg_parser.add_argument('--aug_light', type=int, default=1, help='number of light augmentations on merged images')
+	arg_parser.add_argument('--aug_merged', type=int, default=2, help="number of augmented copies of merged image")
+	arg_parser.add_argument('--aug_light', type=int, default=2, help='number of light augmentations on merged images')
 	arg_parser.add_argument('--crop_container_prob', default=0.75, type=float, help='prob that container is randomly cropped')
 	arg_parser.add_argument('--container_min_crop_proportion', default=0.1, type=float, help='minimum percent of container sides that are cropped')
 	arg_parser.add_argument('--seed', default=42, type=int, help='seed for splitting dataset')
@@ -42,7 +43,7 @@ class RecycleClasses(enum.Enum):
 def merge_class_container_images(object_dir, container_dir,
 								 merged_dir, merged_image_size, 
 								 object_size_scale, keep_object_aspect_ratio, num_containers_per_object,
-								 aug_container, aug_object,
+								 aug_container, aug_object, aug_merged,
 								 aug_light, crop_container_prob, container_min_crop_proportion):
 	training_images = []
 	count = 0
@@ -61,7 +62,7 @@ def merge_class_container_images(object_dir, container_dir,
 			
 			# augment obj/container => merge images => add light augmentation
 			merged_images = merge_object_container(resized_object_image, resized_container_image, 
-												   aug_object, aug_container, aug_light)
+												   aug_object, aug_container, aug_merged, aug_light)
 			for merged_image in merged_images:
 				merged_image_name = str(merged_dir / (object_path.stem+'_{}.jpg'.format(count)))
 				cv2.imwrite( merged_image_name, merged_image)
