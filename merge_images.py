@@ -5,15 +5,14 @@ import random
 from pathlib import Path
 import imgaug as ia
 import imgaug.augmenters as iaa
-from image_augmentation import augment_lighting
-from image_augmentation import augment_image
+from image_augmentation import augment_lighting, augment_container, augment_object, augment_merged
 
 OBJECT_IMAGE_SIZE_PERCENT = 0.25
 TRAINING_IMAGE_SIZE = 512
 
 # note this algorithn assumes the object is a clean segmented object
 
-def merge_object_container(obj, container, aug_object=0, aug_container=0, aug_merged=0, add_lighting=0, clean_object_edges=True):
+def merge_object_container(objects, containers, aug_light, aug_merged=0):
 	"""
 	Merge foreground image 'object', with its background image 'container'
 	Args:
@@ -26,45 +25,52 @@ def merge_object_container(obj, container, aug_object=0, aug_container=0, aug_me
 		list of merged object and container images
 	"""
 	merged = []
-	augmentations = []
-	
-	if aug_merged and add_lighting:
-		augmentations = [(add_lighting, augment_lighting), (aug_merged, augment_image)]
-	elif add_lighting:
-		augmentations = [(add_lighting, augment_lighting)]
-	elif aug_merged:
-		augmentations = [(aug_merged, augment_image)]
-
-	if clean_object_edges:
-		obj = clean_edges_of_object(obj)
-	
-	# augmentation if you need change these lines to what match you needs
-	# you may not want to add transformations to backgrounds but this may be used with hands.
-	if aug_container:
-		containers = apply_transformations(container, aug_container)
-	else:
-		containers = [container]
-	# augment object
-	if aug_object:
-		objects = apply_transformations(obj, aug_object)
-	else:
-		objects = [obj]
-
+	augmentations = [(aug_light, augment_lighting), (aug_merged, augment_merged)]
 	# merge images
-	for resized_container in containers:
-		for resized_object in objects:
+	for container in containers:
+		for obj in objects:
 			# this line is not as necessary with the clean edges function but still helps a little
-			mask = np.all(resized_object > 2, axis=2).reshape(TRAINING_IMAGE_SIZE, TRAINING_IMAGE_SIZE, 1)* [1,1,1]
-			merged_image = np.where(mask, resized_object, resized_container)
-			if len(augmentations) > 1:
+			mask = np.all(obj > 2, axis=2).reshape(TRAINING_IMAGE_SIZE, TRAINING_IMAGE_SIZE, 1)* [1,1,1]
+			merged_image = np.where(mask, obj, container)
+			if 	aug_merged and aug_light:
 				random.shuffle(augmentations)
-				for num_augs, aug_func in augmentations:
-					merged.extend(aug_func(merged_image, num_augs))
-			elif len(augmentations) == 1:
-				merged.extend(augmentations[1](merged_image, augmentations[0]))
+				for aug_num, aug_func in augmentations:
+					merged.extend(aug_func(merged_image, aug_num))
 			else:
 				merged.append(merged_image)
 	return merged
+
+def apply_container_augmentations(container, aug_container):
+	
+	augmented_containers = []
+	
+	#augmentations = [(aug_lighting, augment_lighting), (aug_container, augment_image)]
+	#random.shuffle(augmentations)
+	
+	augmentations = [(aug_container, augment_container)]
+	
+	for num_augs, aug_func in augmentations:
+		augmented_containers.extend(aug_func(container, num_augs))
+
+	return augmented_containers
+
+def apply_object_augmentations(obj, mask, aug_color, aug_affine):
+	
+	name = random.randint(1,1000)
+	cv2.imwrite(str(name) +'_mask' +'.jpg', mask)
+
+	color_augmented_objects = []
+	final_augmented_objects = []
+	
+	augmentations = [(aug_color, augment_object)]
+
+	for num_augs, aug_func in augmentations:
+		color_augmented_objects.extend(aug_func(obj, num_augs))
+	for aug_obj in color_augmented_objects:
+		clean_obj = np.where(mask, [0,0,0], aug_obj)
+		final_augmented_objects.extend(apply_transformations(clean_obj, aug_affine))
+	
+	return final_augmented_objects
 
 def apply_transformations(image, N=10):
 	"""
@@ -146,7 +152,8 @@ def clean_edges_of_object(image, thickness=5):
 		image (cv2 image): image to be cleaned
 		thikness (int): thickness of contour lines drawn by drawContours 
 	Returns: 
-		cleaned image 
+		cleaned image
+		mask of cleaned image 
 	"""
 	mask = np.zeros(image.shape, np.uint8)
 	gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
@@ -159,7 +166,7 @@ def clean_edges_of_object(image, thickness=5):
 	# -1 signifies drawing all contours 
 	cv2.drawContours(mask, contours, -1, (255, 255, 255), thickness)
 	mask = np.all(mask == 255, axis=2).reshape(image.shape[0], image.shape[1], 1)* [1,1,1]
-	return np.where(mask, [0,0,0], image)
+	return np.where(mask, [0,0,0], image), mask
 
 	
 def crop_and_resize_image(image, size, min_crop=0.25, prob=0.5):

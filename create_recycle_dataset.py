@@ -7,8 +7,8 @@ from pathlib import Path
 from tqdm import tqdm
 
 from merge_images import crop_and_resize_image
-from merge_images import resize_object
-from merge_images import merge_object_container
+from merge_images import resize_object, clean_edges_of_object
+from merge_images import merge_object_container, apply_object_augmentations, apply_container_augmentations
 
 def get_args():
 	arg_parser = argparse.ArgumentParser(description="")
@@ -25,9 +25,10 @@ def get_args():
 							help='proportion of times to keep objects aspect ratio the same after resizing')
 	arg_parser.add_argument('--num_containers_per_object', type=int, default=5, help="number of containers to combine with each object")
 	arg_parser.add_argument('--aug_container', type=int, default=1, help="number of augmented copies of container")
-	arg_parser.add_argument('--aug_object', type=int, default=1, help="number of augmented copies of object")
-	arg_parser.add_argument('--aug_merged', type=int, default=2, help="number of augmented copies of merged image")
-	arg_parser.add_argument('--aug_light', type=int, default=2, help='number of light augmentations on merged images')
+	arg_parser.add_argument('--aug_merged', type=int, default=1, help="number of augmented copies of merged image")
+	arg_parser.add_argument('--aug_color', type=int, default=2, help="number of color augmented copies of object")
+	arg_parser.add_argument('--aug_affine', type=int, default=1, help="number of affine augmented copies of object")
+	arg_parser.add_argument('--aug_light', type=int, default=1, help='number of light augmentations on images')
 	arg_parser.add_argument('--crop_container_prob', default=0.75, type=float, help='prob that container is randomly cropped')
 	arg_parser.add_argument('--container_min_crop_proportion', default=0.1, type=float, help='minimum percent of container sides that are cropped')
 	arg_parser.add_argument('--seed', default=42, type=int, help='seed for splitting dataset')
@@ -40,11 +41,10 @@ class RecycleClasses(enum.Enum):
 	class4 = 3
 	class5 = 4
 
-def merge_class_container_images(object_dir, container_dir,
-								 merged_dir, merged_image_size, 
-								 object_size_scale, keep_object_aspect_ratio, num_containers_per_object,
-								 aug_container, aug_object, aug_merged,
-								 aug_light, crop_container_prob, container_min_crop_proportion):
+def merge_class_container_images(object_dir, container_dir, merged_dir, 
+								 merged_image_size,  object_size_scale, keep_object_aspect_ratio, 
+								 num_containers_per_object, aug_container, aug_color, aug_affine, 
+								 aug_merged, aug_light, crop_container_prob, container_min_crop_proportion):
 	training_images = []
 	count = 0
 	for object_path in tqdm(Path(object_dir).iterdir()):
@@ -60,14 +60,22 @@ def merge_class_container_images(object_dir, container_dir,
 			resized_container_image = crop_and_resize_image(container_image, tuple(merged_image_size))
 			resized_object_image = resize_object(object_image,  merged_image_size, object_size_scale, keep_object_aspect_ratio)
 			
-			# augment obj/container => merge images => add light augmentation
-			merged_images = merge_object_container(resized_object_image, resized_container_image, 
-												   aug_object, aug_container, aug_merged, aug_light)
+			# remove boundary lines from obj
+			resized_object_image, mask = clean_edges_of_object(resized_object_image)
+
+			#apply augmentations to container and objects
+			objects = apply_object_augmentations(resized_object_image, mask, aug_color, aug_affine)
+			containers = apply_container_augmentations(resized_container_image, aug_container)
+
+			# merge augmented objects and containers
+			merged_images = merge_object_container(objects, containers, aug_light, aug_merged)
+
 			for merged_image in merged_images:
 				merged_image_name = str(merged_dir / (object_path.stem+'_{}.jpg'.format(count)))
 				cv2.imwrite( merged_image_name, merged_image)
 				training_images.append(merged_image_name)
 				count+=1
+
 	return training_images
 
 def write_label_file(images, label_file):

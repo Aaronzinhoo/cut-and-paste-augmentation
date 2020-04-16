@@ -393,7 +393,7 @@ def simple_augment_image(images):
     images_aug = seq(images=images)
     return images_aug
 
-def augment_image(image, N=100):
+def augment_merged(image, N=100):
     """
     Given An Image Create Augment N augmented copies of the image
     Since we prefer lists or numpy arrays, it is suggested to use OpenCV for opening images
@@ -403,8 +403,8 @@ def augment_image(image, N=100):
         dtype=np.uint8)
 
     seq = iaa.Sequential([
-        iaa.Fliplr(0.5), # horizontal flips
-        iaa.Flipud(0.5),
+        #iaa.Fliplr(0.5), # horizontal flips
+        #iaa.Flipud(0.5),
         #iaa.CropAndPad(percent=(-0.10, 0.10),
         #               pad_mode=["constant", "mean","maximum"],
         #               pad_cval=(0, 128)), # random crops
@@ -412,7 +412,7 @@ def augment_image(image, N=100):
         # But we only blur about 50% of all images.
         #iaa.Sometimes(0.25,
         #              iaa.GaussianBlur(sigma=(0, 0.5))),
-        iaa.CoarseDropout((0.0, 0.15), size_percent=(0.02, 0.15)),
+        #iaa.CoarseDropout((0.0, 0.15), size_percent=(0.02, 0.15)),
         # Strengthen or weaken the contrast in each image.
         iaa.ContrastNormalization((0.7, 1.50)),
         # Add gaussian noise.
@@ -425,7 +425,11 @@ def augment_image(image, N=100):
         # Make some images brighter and some darker.
         # In 20% of all cases, we sample the multiplier once per channel,
         # which can end up changing the color of the images.
-        iaa.Multiply((0.60, 1.50),per_channel=.35),
+        iaa.Multiply((0.75, 1.25), per_channel=.35),
+        #iaa.ChannelShuffle(0.5),
+        iaa.Cutout(nb_iterations=(1, 3), size=0.25, squared=False,
+                   fill_mode="constant", cval=(0, 255),
+                   fill_per_channel=0.5)
         # Apply affine transformations to each image.
         # Scale/zoom them, translate/move them, rotate them and shear them.
         #iaa.Affine(
@@ -438,6 +442,63 @@ def augment_image(image, N=100):
 
     images_aug = seq(images=images)
     return images_aug
+
+def augment_object(image, N=20):
+    images = np.array(
+        [image for _ in range(N)],
+        dtype=np.uint8)
+
+    seq = iaa.Sequential([
+        # Strengthen or weaken the contrast in each image.
+        #iaa.ContrastNormalization((0.7, 1.50)),
+        # Add gaussian noise.
+        # For 50% of all images, we sample the noise once per pixel.
+        # For the other 50% of all images, we sample the noise per pixel AND
+        # channel. This can change the color (not only brightness) of the
+        # pixels.
+        #iaa.AdditiveGaussianNoise(loc=0, scale=(0.0, 0.05*255), per_channel=0.5),
+        #iaa.PiecewiseAffine(scale=(0.01, 0.07)),
+        # Make some images brighter and some darker.
+        # In 20% of all cases, we sample the multiplier once per channel,
+        # which can end up changing the color of the images.
+        iaa.Multiply((0.50, 1.50),per_channel=.50),
+        iaa.ChannelShuffle(0.5),
+    ], random_order=True)
+
+    images_aug = seq(images=images)
+    return images_aug
+
+def augment_container(image, N=20):
+    images = np.array(
+        [image for _ in range(N)],
+        dtype=np.uint8)
+
+    seq = iaa.Sequential([
+                # Strengthen or weaken the contrast in each image.
+        #iaa.ContrastNormalization((0.7, 1.50)),
+        # Add gaussian noise.
+        # For 50% of all images, we sample the noise once per pixel.
+        # For the other 50% of all images, we sample the noise per pixel AND
+        # channel. This can change the color (not only brightness) of the
+        # pixels.
+        #iaa.AdditiveGaussianNoise(loc=0, scale=(0.0, 0.05*255), per_channel=0.5),
+        #iaa.PiecewiseAffine(scale=(0.01, 0.07)),
+        # Make some images brighter and some darker.
+        # In 20% of all cases, we sample the multiplier once per channel,
+        # which can end up changing the color of the images.
+        iaa.Multiply((0.65, 1.25),per_channel=.35),
+        #iaa.ChannelShuffle(0.5),
+        iaa.Affine(
+            scale={"x": (0.75, 1.5), "y": (0.75, 1.5)},
+            translate_percent={"x": (-0.2, 0.2), "y": (-0.2, 0.2)},
+            rotate=(-20, 20),
+            shear=(-8, 8)
+        )
+    ], random_order=True)
+
+    images_aug = seq(images=images)
+    return images_aug
+
 
 def augment_lighting(image, N=30):
     choices = ['spot', 'parallel']
