@@ -34,8 +34,9 @@ def merge_object_container(objects, containers, aug_light, aug_merged=0):
 			merged_image = np.where(mask, obj, container)
 			if 	aug_merged and aug_light:
 				random.shuffle(augmentations)
-				for aug_num, aug_func in augmentations:
-					merged.extend(aug_func(merged_image, aug_num))
+				aug_images = augmentations[0][1](merged_image, augmentations[0][0])
+				for aug_image in aug_images:
+					merged.extend(augmentations[1][1](aug_image, augmentations[1][0]))
 			else:
 				merged.append(merged_image)
 	return merged
