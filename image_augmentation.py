@@ -427,7 +427,7 @@ def augment_merged(image, N=100):
         # which can end up changing the color of the images.
         iaa.Multiply((0.75, 1.25), per_channel=.35),
         #iaa.ChannelShuffle(0.5),
-        iaa.Cutout(nb_iterations=(1, 3), size=0.25, squared=True,
+        iaa.Cutout(nb_iterations=(1, 3), size=(0.15, 0.25), squared=False,
                    fill_mode="constant", cval=(0, 255),
                    fill_per_channel=0.5)
         # Apply affine transformations to each image.
