@@ -23,10 +23,10 @@ def get_args():
 							help='size of background to scale object size to')
 	arg_parser.add_argument('--keep_object_aspect_ratio', type=float, default=1, 
 							help='proportion of times to keep objects aspect ratio the same after resizing')
-	arg_parser.add_argument('--num_containers_per_object', type=int, default=5, help="number of containers to combine with each object")
+	arg_parser.add_argument('--num_containers_per_object', type=int, default=10, help="number of containers to combine with each object")
 	arg_parser.add_argument('--aug_container', type=int, default=1, help="number of augmented copies of container")
 	arg_parser.add_argument('--aug_merged', type=int, default=1, help="number of augmented copies of merged image")
-	arg_parser.add_argument('--aug_color', type=int, default=2, help="number of color augmented copies of object")
+	arg_parser.add_argument('--aug_color', type=int, default=1, help="number of color augmented copies of object")
 	arg_parser.add_argument('--aug_affine', type=int, default=1, help="number of affine augmented copies of object")
 	arg_parser.add_argument('--aug_light', type=int, default=1, help='number of light augmentations on images')
 	arg_parser.add_argument('--crop_container_prob', default=0.75, type=float, help='prob that container is randomly cropped')
@@ -130,9 +130,9 @@ def split_data(classes, root_dataset_dir, splits, shuffle=True):
         validation_cutoff = int(class_data[0]*splits[1])+training_cutoff
         print("TRAINING IMAGES: {} For Label {}".format(training_cutoff,class_name))
 
-        dataset["train"].extend([(image_path,i) for image_path in class_data[1][:training_cutoff]])
-        dataset["val"].extend([(image_path,i) for image_path in class_data[1][training_cutoff:validation_cutoff]])
-        dataset["test"].extend([(image_path,i) for image_path in class_data[1][validation_cutoff:]])
+        dataset["train"].extend([(image_path,class_name) for image_path in class_data[1][:training_cutoff]])
+        dataset["val"].extend([(image_path,class_name) for image_path in class_data[1][training_cutoff:validation_cutoff]])
+        dataset["test"].extend([(image_path,class_name) for image_path in class_data[1][validation_cutoff:]])
 
 
     # shuffle labels if dataloader is not configured to do so

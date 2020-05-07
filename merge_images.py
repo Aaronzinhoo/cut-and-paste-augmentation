@@ -56,10 +56,6 @@ def apply_container_augmentations(container, aug_container):
 	return augmented_containers
 
 def apply_object_augmentations(obj, mask, aug_color, aug_affine):
-	
-	name = random.randint(1,1000)
-	cv2.imwrite(str(name) +'_mask' +'.jpg', mask)
-
 	color_augmented_objects = []
 	final_augmented_objects = []
 	
